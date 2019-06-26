@@ -6,7 +6,7 @@ This is a personal repository to store brief ideas, documents and quick notes.
 
 - Pangenome pipeline
 - SNP phenotyping (add link here)
-- 
+-
 
 ## Documents
 
@@ -14,4 +14,4 @@ This is a personal repository to store brief ideas, documents and quick notes.
 
 ## Notes
 
--
+- testing
