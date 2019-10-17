@@ -1,3 +1,13 @@
+#!c:\Programming\Anaconda2\envs\py36\python
+
+# c:\Programming\Anaconda2\envs\tensorflow\python  # python 3.5
+# c:\Programming\Anaconda2\envs\py36\python   # python 3.6
+# c:\Programming\Anaconda2\python
+
+
+import sys
+print(sys.version)
+
 print ("Hello World!")
 
 
