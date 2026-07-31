@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biodata Exhibit — Scaffold v2</title>
+<style>
+  :root{
+    --bg:#0A1420; --panel:#0F1E2E; --track:#2A3A4A;
+    --signal:#3FE0C8; --alert:#FF6B4A; --bone:#E8EEF2; --dim:#7C93A6;
+    --af:#1A73E8;
+    --mono:'DejaVu Sans Mono',ui-monospace,Menlo,Consolas,monospace;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--bone);
+    font-family:var(--sans);overflow:hidden;user-select:none}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+  #stage{position:fixed;inset:0;display:flex;flex-direction:column}
+  .hook{padding:2.2vh 4vw 0;font-size:2.1vw;font-weight:600;letter-spacing:.5px}
+  .hook .kw{color:var(--signal)}
+  .sub{padding:.4vh 4vw 0;color:var(--dim);font-size:1.15vw;letter-spacing:2px;text-transform:uppercase}
+  .arena{flex:1;position:relative;margin:2vh 4vw;border:1px solid var(--track);
+    border-radius:10px;background:var(--panel);overflow:hidden}
+  #bar{position:fixed;bottom:0;left:0;right:0;height:34px;display:flex;gap:16px;
+    align-items:center;padding:0 14px;background:#06101a;border-top:1px solid var(--track);
+    font-family:var(--mono);font-size:12px;color:var(--dim);z-index:50}
+  #bar b{color:var(--signal)} #bar .mode{color:var(--alert)} #bar .helper{color:var(--bone)}
+  #bar kbd{background:#122536;border:1px solid var(--track);border-radius:3px;padding:1px 5px;color:var(--bone)}
+  #scene,#aScene,#cScene{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-around;
+    gap:2vw;padding:7vh 4vw 3vh;overflow:hidden}
+  #scene.hide,#aScene.hide,#cScene.hide{display:none}
+  .node{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2vh;
+    flex:1 1 0;min-width:0;max-width:30vw}
+  .node svg{width:min(15vw,22vh);height:min(15vw,22vh)}
+  .node .cap{font-family:var(--mono);letter-spacing:2px;text-transform:uppercase;font-size:1vw;color:var(--dim)}
+  .node.target .cap{color:var(--signal)}
+  #bucket{cursor:grab;touch-action:none;transition:transform .05s}
+  #bucket.dragging{cursor:grabbing;filter:drop-shadow(0 0 14px rgba(63,224,200,.6))}
+  .dropzone{outline:2px dashed transparent;border-radius:14px;transition:outline-color .2s,background .2s}
+  .dropzone.armed{outline-color:var(--signal);background:rgba(63,224,200,.06)}
+  .hint{position:absolute;top:2vh;left:50%;transform:translateX(-50%);
+    font-family:var(--mono);color:var(--dim);font-size:1.1vw;letter-spacing:1px}
+  .refrow{display:flex;justify-content:center;gap:.15vw;padding:2.2vh 0 1vh;font-family:var(--mono)}
+  .refrow .base{font-size:2.3vw;font-weight:700;color:var(--dim);width:2.6vw;text-align:center}
+  .refrow .col.hot{cursor:pointer}
+  .refrow .col.hot.helper .base{color:var(--bone)}
+  .reads{position:relative;height:44vh;margin:0 auto;width:92%;overflow:hidden}
+  .read{position:absolute;left:0;display:flex;gap:.15vw;font-family:var(--mono);
+    font-size:2.3vw;white-space:nowrap;justify-content:center;width:100%}
+  .read span{width:2.6vw;text-align:center;color:var(--signal)}
+  .read span.mm{color:var(--signal)}              /* mismatch hidden unless helper on */
+  .read.help span.mm{color:var(--alert)}
+  .marker{position:absolute;top:0;bottom:0;width:2.6vw;border-radius:6px;pointer-events:none;transition:opacity .3s}
+  .marker.candidate{background:rgba(255,107,74,.10);box-shadow:inset 0 0 0 2px rgba(255,107,74,.5);
+    animation:pulse 1.1s ease-in-out infinite}
+  .marker.locked{background:rgba(63,224,200,.12);box-shadow:inset 0 0 0 2px var(--signal)}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .tally{position:absolute;top:14px;right:18px;font-family:var(--mono);text-align:right}
+  .tally .n{font-size:2.6vw;color:var(--signal);font-weight:700}
+  .tally .lab{font-size:.9vw;color:var(--dim);letter-spacing:2px;text-transform:uppercase}
+  .toast{position:absolute;left:50%;bottom:4vh;transform:translateX(-50%) translateY(10px);
+    font-family:var(--mono);font-size:1.35vw;font-weight:600;letter-spacing:.5px;text-align:center;
+    padding:1.2vh 2vw;border-radius:10px;border:1px solid var(--track);background:#0c1c2b;
+    color:var(--bone);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:70vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.good{border-color:var(--signal);color:var(--signal);box-shadow:0 0 26px rgba(63,224,200,.35)}
+  .toast.warn{border-color:var(--alert);color:var(--alert);box-shadow:0 0 26px rgba(255,107,74,.3)}
+  .toast.info{border-color:var(--dim);color:var(--bone)}
+  .refrow .col.nudge{animation:cnudge .4s ease}
+  @keyframes cnudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .verdict{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(10,20,32,.92);opacity:0;pointer-events:none;transition:opacity .5s}
+  .verdict.show{opacity:1;pointer-events:auto}
+  .verdict .big{font-size:5vw;font-weight:700;color:var(--alert);letter-spacing:2px}
+  .verdict .lab{color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-top:1vh}
+  .cta{margin-top:3vh;font-family:var(--mono);color:var(--signal);font-size:1.2vw;
+    border:1px solid var(--signal);border-radius:6px;padding:10px 22px;cursor:pointer;background:none}
+  #foldwrap{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center}
+  #foldwrap.show{display:flex}
+  .aflogo{display:flex;align-items:center;gap:10px;margin-bottom:2vh}
+  .aflogo .mark{width:34px;height:34px}
+  .aflogo .wm{font-size:1.7vw;font-weight:600;letter-spacing:.5px}
+  .aflogo .wm .a{color:var(--af)} .aflogo .wm .f{color:var(--bone)}
+  .aflogo .by{font-family:var(--mono);font-size:.8vw;color:var(--dim);letter-spacing:1px;margin-left:8px}
+  .folds{display:flex;gap:2.2vw;align-items:flex-start}
+  .foldcol{text-align:center}
+  .foldcol h4{font-family:var(--mono);letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;font-size:.85vw;margin:0 0 1vh;min-height:2.4em}
+  .foldcol.mut h4{color:var(--alert)}
+  .foldcol.ov h4{color:var(--bone)}
+  canvas{border-radius:10px;background:#081019}
+  /* ---------- Challenge A: metagenomics ---------- */
+  #aScene .node svg{width:min(15vw,22vh);height:min(15vw,22vh)}
+  .aStage{position:absolute;inset:0;display:none;grid-template-columns:1.6fr 1fr;gap:1.5vw;padding:2vh 2vw}
+  .aStage.show{display:grid}
+  .fragfield{position:relative;border-right:1px solid var(--track);overflow:hidden}
+  .fragfield .lab,.orgpanel .lab,.community .lab{font-family:var(--mono);font-size:.85vw;
+    letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:1vh}
+  .frag{position:absolute;font-family:var(--mono);font-size:1.15vw;padding:.5vh .7vw;border-radius:6px;
+    background:#13283a;border:1px solid var(--track);color:var(--signal);cursor:grab;white-space:nowrap;
+    touch-action:none;transition:box-shadow .15s,transform .05s}
+  .frag.dragging{cursor:grabbing;z-index:20;box-shadow:0 0 16px rgba(63,224,200,.5)}
+  .frag.candidate{animation:pulse 1.1s ease-in-out infinite;border-color:var(--alert)}
+  .frag.done{opacity:.25;pointer-events:none;border-style:dashed}
+  .frag .motif{letter-spacing:1px}
+  .frag.piled{box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .frag.dissolve{animation:dissolve .42s ease forwards}
+  @keyframes dissolve{to{opacity:0;transform:scale(1.4);filter:blur(3px)}}
+  .emptyhint{font-family:var(--mono);font-size:.85vw;color:var(--track);line-height:1.5;font-style:italic}
+  .org.appear{animation:rise .45s ease both}
+  .org .cnt.bump{animation:bump .4s ease}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.5);color:var(--bone)}100%{transform:scale(1)}}
+  .commorg .cabund{font-family:var(--mono);font-size:1vw;color:var(--signal)}
+  .commorg.invasive .cabund{color:var(--alert)}
+  .orgpanel{display:flex;flex-direction:column;gap:1vh}
+  .orgs{display:flex;flex-direction:column;gap:1vh;flex:1}
+  .org{display:flex;align-items:center;gap:.8vw;padding:1vh .8vw;border:1px solid var(--track);
+    border-radius:8px;background:#0d1a26;transition:outline-color .2s,background .2s}
+  .org.armed{outline:2px solid var(--signal);background:rgba(63,224,200,.06)}
+  .org.invasive.found{outline:2px solid var(--alert);background:rgba(255,107,74,.08)}
+  .org .dot{width:1.4vw;height:1.4vw;border-radius:50%;flex:none}
+  .org .nm{font-size:1vw}.org .sci{font-size:.75vw;color:var(--dim);font-style:italic}
+  .org .cnt{margin-left:auto;font-family:var(--mono);color:var(--signal);font-size:1.1vw}
+  .community{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;background:rgba(10,20,32,.94);opacity:0;transition:opacity .5s}
+  .community.show{display:flex;opacity:1}
+  .commgrid{display:flex;flex-wrap:wrap;gap:1.4vw;justify-content:center;max-width:70vw;margin:2vh 0}
+  .commorg{display:flex;flex-direction:column;align-items:center;gap:.6vh;
+    animation:rise .5s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  .commorg .glyph{width:5vw;height:5vw;border-radius:12px;display:flex;align-items:center;
+    justify-content:center;font-size:2.6vw;background:#0d1a26;border:1px solid var(--track)}
+  .commorg.invasive .glyph{border-color:var(--alert);box-shadow:0 0 18px rgba(255,107,74,.4)}
+  .commorg .clab{font-size:.8vw;color:var(--dim)}
+  .community .big{font-size:2.3vw;font-weight:600}
+  .community .big .kw{color:var(--signal)}
+  .community .flag{color:var(--alert);font-family:var(--mono);font-size:1vw;letter-spacing:1px;margin-top:1vh}
+
+  /* ---------- Challenge C: ML cell typing ---------- */
+  #cScene .node svg{width:min(15vw,22vh);height:min(15vw,22vh)}
+  .cStage{position:absolute;inset:0;display:none;flex-direction:column;padding:1.5vh 2vw 2vh}
+  .cStage.show{display:flex}
+  .cTop{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1vh}
+  .cTop .lab{font-family:var(--mono);font-size:.85vw;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+  .ccanvas-wrap{flex:1;position:relative;border:1px solid var(--track);border-radius:8px;overflow:hidden;background:#081019}
+  #cCanvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
+  .cTools{display:flex;gap:1.5vw;align-items:center;margin-top:1.2vh}
+  .cBtn{font-family:var(--mono);color:var(--signal);font-size:1vw;border:1px solid var(--signal);
+    border-radius:6px;padding:8px 18px;cursor:pointer;background:none}
+  .cBtn:disabled{opacity:.35;cursor:default}
+  .cBtn.ml{color:var(--bone);border-color:var(--bone)}
+  .cSlider{display:flex;align-items:center;gap:.8vw;font-family:var(--mono);color:var(--dim);font-size:.85vw}
+  .cSlider input{width:16vw}
+  .cScore{margin-left:auto;font-family:var(--mono);font-size:1vw;color:var(--dim)}
+  .cScore b{color:var(--signal)} .cScore .m{color:var(--bone)}
+  .cReveal{position:absolute;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;padding:1.6vh 3vw;background:linear-gradient(to top,rgba(8,16,25,.97),rgba(8,16,25,.86) 70%,rgba(8,16,25,0));
+    opacity:0;transition:opacity .5s;text-align:center}
+  .cReveal.show{display:flex;opacity:1}
+  .cReveal .big{font-size:1.7vw;font-weight:600;line-height:1.35}
+  .cReveal .big .kw{color:var(--signal)} .cReveal .big .alert{color:var(--alert)}
+  .cReveal .flag{color:var(--alert);font-family:var(--mono);font-size:.9vw;letter-spacing:1px;margin-top:.8vh}
+  .cReveal .cmp{display:flex;gap:2vw;margin-top:1vh;font-family:var(--mono);font-size:1.1vw}
+  .cReveal .cmp .you{color:var(--dim)} .cReveal .cmp .you b{color:var(--bone)}
+  .cReveal .cmp .comp{color:var(--bone)} .cReveal .cmp .comp b{color:var(--signal)}
+  .cBody{flex:1;display:flex;gap:1.2vw;min-height:0}
+  .cBody .ccanvas-wrap{flex:1}
+  .cGroups{width:20vw;display:flex;flex-direction:column;border:1px solid var(--track);border-radius:8px;
+    background:#0d1a26;padding:1vh .8vw;overflow:hidden}
+  .cGroups .glab{font-family:var(--mono);font-size:.8vw;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:1vh}
+  .glist{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:.8vh}
+  .gempty{font-family:var(--mono);font-size:.8vw;color:var(--track);font-style:italic}
+  .grow{display:flex;align-items:flex-start;gap:.6vw;padding:.7vh .6vw;border:1px solid var(--track);
+    border-radius:6px;animation:rise .3s ease both}
+  .gdot{width:1vw;height:1vw;border-radius:50%;flex:none;margin-top:.3vh}
+  .ginfo{flex:1;min-width:0}
+  .gtitle{font-size:.85vw;color:var(--bone);line-height:1.3}
+  .gcomp{font-family:var(--mono);font-size:.72vw;color:var(--dim);margin-top:.3vh;line-height:1.4}
+  .gdis{color:var(--alert)}
+  .grm{background:none;border:none;color:var(--dim);cursor:pointer;font-size:1vw;padding:0 .3vw;line-height:1}
+  .grm:hover{color:var(--alert)}
+
+
+  .stub .id{font-size:6vw;font-weight:700;color:var(--track)}
+  .stub h2{color:var(--bone);font-size:2.4vw;margin:.5vh 0}
+  .stub p{max-width:40vw;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="bar">
+  <span><b>ATTENDANT</b></span>
+  <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> challenge</span>
+  <span><kbd>Space</kbd> next</span>
+  <span><kbd>R</kbd> reset</span>
+  <span><kbd>M</kbd> mode</span>
+  <span><kbd>H</kbd> helper: <span class="helper" id="barHelp">off</span></span>
+  <span><kbd>Esc</kbd> idle</span>
+  <span>&#9474; <b id="barCh">B</b> &#183; <span class="mode" id="barMode">Player</span></span>
+</div>
+<script>
+const stage=document.getElementById('stage');
+const MODES=['Player','Crowd','Vs-machine'];
+let mode='Player', current=null;
+function setBar(id){ document.getElementById('barCh').textContent=id;
+  document.getElementById('barMode').textContent=mode; }
+const Shell={
+  registry:{},
+  register(ch){ this.registry[ch.id]=ch; },
+  go(id){ if(current) current.unmount(); stage.innerHTML='';
+    current=this.registry[id]; current.mount(stage,mode); setBar(id); },
+  cycleMode(){ mode=MODES[(MODES.indexOf(mode)+1)%MODES.length];
+    if(current) current.setMode(mode); setBar(current?current.id:'-'); }
+};
+window.addEventListener('keydown',e=>{
+  if(e.key==='1')Shell.go('A'); else if(e.key==='2')Shell.go('B'); else if(e.key==='3')Shell.go('C');
+  else if(e.key==='r'||e.key==='R'){ if(current)current.reset(); }
+  else if(e.key==='m'||e.key==='M')Shell.cycleMode();
+  else if(e.key==='h'||e.key==='H'){ if(current&&current.toggleHelper)current.toggleHelper(); }
+  else if(e.key==='Escape'){ if(current)current.idle(); }
+  else if(e.key===' '){ e.preventDefault(); if(current)current.action(); }
+});
+// app-wide resize: re-fit any canvas-based challenge so nothing goes out of bounds
+var _rzT=null;
+window.addEventListener('resize',function(){
+  clearTimeout(_rzT);
+  _rzT=setTimeout(function(){
+    if(current&&current.onResize) current.onResize();
+    if(current&&current._idleResize) current._idleResize();
+  },120);
+});
+const ChallengeB=(function(){
+  const REF="ACGTGGCATTACGATCGGCATACGTTAGC".split('');
+  const TRUTH={6:{type:'real',alt:'T'},12:{type:'real',alt:'A'},
+               19:{type:'real',alt:'G'},23:{type:'noise',alt:'C'}};
+  const THRESHOLD=3, VARIANT_NAME="BA.7-\u03B4";
+  let el={},state,mode,helper=false,timers=[],raf=0;
+  function fresh(){ return {phase:'scene',act:1,locked:new Set(),seen:{},running:false,candidateCol:null}; }
+  function clearTimers(){ timers.forEach(clearInterval); timers=[]; cancelAnimationFrame(raf); cancelAnimationFrame(foldRAF); }
+  function mount(root,m){
+    mode=m; state=fresh();
+    root.innerHTML=
+      '<div class="hook">A city\u2019s <span class="kw">wastewater</span> is a disease radar. Take a sample, then catch the mutation.</div>'+
+      '<div class="sub">Challenge B \u00B7 Variant calling \u00B7 lineagespot</div>'+
+      '<div class="arena" id="arena">'+sceneHTML()+
+        '<div class="tally" style="display:none"><div class="n" id="tallyN">0</div><div class="lab">mutations confirmed</div></div>'+
+        '<div class="refrow" id="refrow" style="display:none"></div>'+
+        '<div class="reads" id="reads" style="display:none"></div>'+
+        '<div class="toast" id="toast"></div>'+
+        '<div class="verdict" id="verdict"><div class="big" id="vname"></div><div class="lab">variant identified</div>'+
+          '<button class="cta" id="foldBtn">Fold the mutated protein \u2192</button></div>'+
+        foldHTML()+
+      '</div>';
+    el={arena:root.querySelector('#arena'),scene:root.querySelector('#scene'),
+        refrow:root.querySelector('#refrow'),reads:root.querySelector('#reads'),
+        tallyBox:root.querySelector('.tally'),tally:root.querySelector('#tallyN'),
+        toast:root.querySelector('#toast'),verdict:root.querySelector('#verdict'),
+        vname:root.querySelector('#vname'),foldBtn:root.querySelector('#foldBtn'),
+        foldwrap:root.querySelector('#foldwrap')};
+    el.foldBtn.onclick=function(){enterActII();};
+    wireScene(); setHelperBar();
+  }
+  function sceneHTML(){ return ''+
+    '<div id="scene"><div class="hint" id="hint">Drag the bucket to the water system, then to the sequencer</div>'+
+      '<div class="node dropzone" id="water"><svg viewBox="0 0 100 100">'+
+        '<rect x="8" y="20" width="26" height="30" rx="2" fill="#2A3A4A"/>'+
+        '<rect x="38" y="12" width="22" height="38" rx="2" fill="#33465a"/>'+
+        '<rect x="64" y="26" width="24" height="24" rx="2" fill="#2A3A4A"/>'+
+        '<rect x="14" y="28" width="6" height="6" fill="#0F1E2E"/><rect x="24" y="28" width="6" height="6" fill="#0F1E2E"/>'+
+        '<rect x="44" y="20" width="6" height="6" fill="#0F1E2E"/><rect x="44" y="32" width="6" height="6" fill="#0F1E2E"/>'+
+        '<path d="M0 62 Q25 54 50 62 T100 62 V100 H0 Z" fill="#12303a"/>'+
+        '<path d="M0 68 Q25 60 50 68 T100 68 V100 H0 Z" fill="#0d2530" opacity=".7"/>'+
+        '<circle cx="30" cy="78" r="2" fill="#3FE0C8" opacity=".5"/><circle cx="70" cy="82" r="1.5" fill="#3FE0C8" opacity=".4"/>'+
+        '</svg><div class="cap">City &amp; sewer network</div></div>'+
+      '<div class="node target" id="bucketNode"><svg id="bucket" viewBox="0 0 100 100">'+
+        '<ellipse cx="50" cy="30" rx="26" ry="8" fill="none" stroke="#7C93A6" stroke-width="3"/>'+
+        '<path d="M26 30 L34 76 Q35 82 50 82 Q65 82 66 76 L74 30" fill="#16283a" stroke="#7C93A6" stroke-width="3"/>'+
+        '<path class="water" d="M30 42 Q50 48 70 42 L66 74 Q65 79 50 79 Q35 79 34 74 Z" fill="none"/>'+
+        '<path d="M28 26 Q50 6 72 26" fill="none" stroke="#7C93A6" stroke-width="3"/>'+
+        '</svg><div class="cap">Sample bucket</div></div>'+
+      '<div class="node dropzone" id="seq"><svg viewBox="0 0 100 100">'+
+        '<rect x="18" y="16" width="64" height="68" rx="4" fill="#33465a"/>'+
+        '<rect x="26" y="24" width="48" height="26" rx="2" fill="#0d1a26"/>'+
+        '<rect x="30" y="30" width="8" height="14" fill="#3FE0C8" opacity=".8"/>'+
+        '<rect x="42" y="34" width="8" height="10" fill="#3FE0C8" opacity=".5"/>'+
+        '<rect x="54" y="28" width="8" height="16" fill="#3FE0C8" opacity=".65"/>'+
+        '<rect x="26" y="56" width="48" height="6" rx="3" fill="#2A3A4A"/>'+
+        '<rect x="26" y="66" width="34" height="6" rx="3" fill="#2A3A4A"/>'+
+        '<circle cx="72" cy="69" r="4" fill="#FF6B4A"/>'+
+        '</svg><div class="cap">Sequencer</div></div></div>'; }
+  function wireScene(){
+    const bucket=el.scene.querySelector('#bucket');
+    const water=el.scene.querySelector('#water');
+    const seq=el.scene.querySelector('#seq');
+    const node=el.scene.querySelector('#bucketNode');
+    let dragging=false,gotSample=false,ox=0,oy=0;
+    function zones(){ return [water,seq].map(function(z){return {z:z,r:z.getBoundingClientRect()};}); }
+    function over(x,y){ return zones().find(function(o){return x>o.r.left&&x<o.r.right&&y>o.r.top&&y<o.r.bottom;}); }
+    function pt(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+    function down(e){ e.preventDefault(); dragging=true; bucket.classList.add('dragging'); const p=pt(e); ox=p.x; oy=p.y; }
+    function move(e){ if(!dragging)return; const p=pt(e);
+      bucket.style.transform='translate('+(p.x-ox)+'px,'+(p.y-oy)+'px)';
+      const hit=over(p.x,p.y); [water,seq].forEach(function(z){z.classList.remove('armed');});
+      if(hit){ if(hit.z===water&&!gotSample) water.classList.add('armed');
+               if(hit.z===seq&&gotSample) seq.classList.add('armed'); } }
+    function up(e){ if(!dragging)return; dragging=false; bucket.classList.remove('dragging');
+      const p=pt(e); const hit=over(p.x,p.y); [water,seq].forEach(function(z){z.classList.remove('armed');});
+      if(hit&&hit.z===water&&!gotSample){ gotSample=true; node.classList.add('filled');
+        el.scene.querySelector('.water').style.fill='var(--signal)';
+        el.scene.querySelector('#hint').textContent='Sample taken \u2014 now drop it into the sequencer';
+      } else if(hit&&hit.z===seq&&gotSample){ startSequencing(); return; }
+      bucket.style.transform=''; }
+    bucket.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+    bucket.addEventListener('touchstart',down,{passive:false});
+    window.addEventListener('touchmove',move,{passive:false}); window.addEventListener('touchend',up);
+    el._sceneCleanup=function(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up);
+      window.removeEventListener('touchmove',move); window.removeEventListener('touchend',up); };
+  }
+  function autoSample(){ if(state.phase!=='scene')return; startSequencing(); }
+  function startSequencing(){
+    state.phase='reads'; state.running=true; el.scene.classList.add('hide');
+    el.tallyBox.style.display=''; el.refrow.style.display=''; el.reads.style.display='';
+    buildRef(); startReads();
+  }
+  function buildRef(){
+    el.refrow.innerHTML='';
+    REF.forEach(function(b,i){
+      const col=document.createElement('div');
+      col.className='col hot'+(helper&&TRUTH[i]?' helper':'');   // every position clickable
+      col.dataset.i=i; col.innerHTML='<div class="base">'+b+'</div>';
+      const mk=document.createElement('div'); mk.className='marker'; col.appendChild(mk);
+      col.addEventListener('click',function(){commitCol(i);});
+      el.refrow.appendChild(col);
+    });
+  }
+  function spawnRead(){
+    if(!state.running||state.phase!=='reads')return;
+    const read=document.createElement('div'); read.className='read'+(helper?' help':'');
+    read.innerHTML=REF.map(function(b,i){
+      let ch=b,mm=false;
+      if(TRUTH[i]){ const t=TRUTH[i]; const p=t.type==='real'?0.8:0.15;
+        if(Math.random()<p){ ch=t.alt; mm=true; state.seen[i]=(state.seen[i]||0)+1; } }
+      return '<span class="'+(mm?'mm':'')+'">'+ch+'</span>';
+    }).join('');
+    read.style.top='44vh'; el.reads.appendChild(read);
+    const start=performance.now();
+    (function fall(now){ const t=(now-start)/4000; read.style.top=(44-52*t)+'vh';
+      if(t<1&&state.phase==='reads') raf=requestAnimationFrame(fall); else read.remove(); })(start);
+    if(mode==='Crowd') maybeFlagCandidate();
+  }
+  function maybeFlagCandidate(){
+    const un=Object.keys(TRUTH).map(Number).filter(function(i){return !state.locked.has(i);});
+    if(un.length&&state.candidateCol===null){ state.candidateCol=un[Math.floor(Math.random()*un.length)];
+      markCol(state.candidateCol,'candidate'); }
+  }
+  function markCol(i,cls){ const m=el.refrow.querySelector('.col[data-i="'+i+'"] .marker'); if(m)m.className='marker '+cls; }
+  function commitCol(i){
+    if(state.phase!=='reads')return;
+    const t=TRUTH[i];
+    if(state.locked.has(i)) return;
+    if(!t){ flash('No variation here \u2014 every read matches the reference.','info');
+      var c=el.refrow.querySelector('.col[data-i="'+i+'"]'); if(c){ c.classList.add('nudge'); setTimeout(function(){c.classList.remove('nudge');},400);} return; }
+    if(t.type==='noise'){ flash('Seen only rarely \u2014 that\u2019s sequencing noise, not a real mutation.','warn'); return; }
+    state.locked.add(i); markCol(i,'locked'); el.tally.textContent=state.locked.size; state.candidateCol=null;
+    flash('Mutation confirmed \u2014 it recurs across many reads.','good');
+    if(state.locked.size>=THRESHOLD) callVariant();
+  }
+  function flash(m,kind){ el.toast.textContent=m; el.toast.className='toast show '+(kind||'info');
+    clearTimeout(state._toastT); state._toastT=setTimeout(function(){el.toast.className='toast';},2200); }
+  function callVariant(){ state.running=false; clearTimers(); el.vname.textContent=VARIANT_NAME; el.verdict.classList.add('show'); }
+  function startReads(){ clearTimers(); timers.push(setInterval(spawnRead,650)); }
+  function foldHTML(){ return ''+
+    '<div id="foldwrap"><div class="aflogo">'+
+      '<svg class="mark" viewBox="0 0 40 40" aria-label="AlphaFold logo placeholder">'+
+        '<circle cx="20" cy="20" r="18" fill="none" stroke="#1A73E8" stroke-width="2.5"/>'+
+        '<path d="M10 26 Q14 10 20 20 T30 14" fill="none" stroke="#1A73E8" stroke-width="3" stroke-linecap="round"/>'+
+      '</svg><span class="wm"><span class="a">Alpha</span><span class="f">Fold</span></span>'+
+      '<span class="by">structure prediction \u00B7 lab collaboration</span></div>'+
+    '<div class="folds">'+
+      '<div class="foldcol"><h4>Healthy</h4><canvas id="cHealthy" width="300" height="330"></canvas></div>'+
+      '<div class="foldcol ov"><h4>Superimposed \u2014 differences flagged</h4><canvas id="cOverlay" width="300" height="330"></canvas></div>'+
+      '<div class="foldcol mut"><h4>Mutated \u2014 binding site deformed</h4><canvas id="cMut" width="300" height="330"></canvas></div>'+
+    '</div></div>'; }
+
+  // ---- shared rotation clock across all three panels ----
+  var foldClock=0, foldRAF=0;
+  // TODO: replace synthetic backbones with real AlphaFold-predicted coordinates
+  // (healthy vs mutated) loaded into a Mol*/NGL viewer for scientific fidelity.
+  // Two DIFFERENT secondary-structure layouts so the shapes read as distinct.
+  const SEG_HEALTHY=[{t:'loop',n:6},{t:'helix',n:24},{t:'loop',n:5},
+      {t:'sheet',n:14},{t:'loop',n:4},{t:'helix',n:16},
+      {t:'loop',n:5},{t:'sheet',n:14,site:true},{t:'loop',n:6}];
+  const SEG_MUTANT =[{t:'loop',n:6},{t:'helix',n:18},{t:'loop',n:8},   // helix shortened
+      {t:'sheet',n:10},{t:'loop',n:7},{t:'loop',n:12,site:true},        // a sheet unravels into loop at the site
+      {t:'helix',n:10},{t:'loop',n:5},{t:'sheet',n:9},{t:'loop',n:6}];
+
+  // Build 3D backbone points for a given segment layout; project with rotation `a`.
+  function backbone(segs,a,mutated){
+    const total=segs.reduce(function(s,x){return s+x.n;},0), pts=[]; let idx=0;
+    segs.forEach(function(s){ for(let k=0;k<s.n;k++){ const g=idx/total; idx++;
+      const th=g*Math.PI*5, r=90+34*Math.sin(g*Math.PI*3);
+      const warp=(mutated&&s.site)?1.55:1;
+      // 3D coords, then rotate about vertical axis by `a`
+      const x0=Math.cos(th)*r*0.8*warp, z0=Math.sin(th)*r*0.8*warp, y=(g-0.5)*150+Math.sin(th*1.2)*22;
+      const x=x0*Math.cos(a)-z0*Math.sin(a), z=x0*Math.sin(a)+z0*Math.cos(a);
+      pts.push({x:x,y:y,z:z,type:s.t,site:!!s.site}); } });
+    return pts;
+  }
+  function project(p,cx,cy){ const s=520/(520+p.z); return {x:cx+p.x*s,y:cy+p.y*s,s:s}; }
+
+  function drawStructure(ctx,cx,cy,pts,palette){
+    // loop tube
+    ctx.lineWidth=4; ctx.lineCap='round'; ctx.strokeStyle=palette.loop;
+    ctx.beginPath(); pts.forEach(function(p,i){ const q=project(p,cx,cy); i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y); }); ctx.stroke();
+    // secondary structure runs
+    let i=0;
+    while(i<pts.length){ const t=pts[i].type;
+      let j=i; while(j<pts.length&&pts[j].type===t)j++;
+      const seg=pts.slice(i,j);
+      if(t==='helix') drawHelix(ctx,cx,cy,seg,palette);
+      else if(t==='sheet') drawSheet(ctx,cx,cy,seg,palette);
+      i=j;
+    }
+  }
+  function drawHelix(ctx,cx,cy,seg,pal){
+    ctx.lineCap='round';
+    for(let i=0;i<seg.length-1;i++){ const a=project(seg[i],cx,cy),b=project(seg[i+1],cx,cy);
+      ctx.lineWidth=12*a.s; ctx.globalAlpha=i%2?0.5:1; ctx.strokeStyle=pal.helix;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
+  function drawSheet(ctx,cx,cy,seg,pal){
+    if(seg.length<2)return;
+    ctx.lineCap='butt'; ctx.strokeStyle=seg[0].site?pal.sheetSite:pal.sheet;
+    ctx.beginPath(); for(let i=0;i<seg.length-1;i++){ const p=project(seg[i],cx,cy); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+    const pen=project(seg[seg.length-2],cx,cy); ctx.lineWidth=15*pen.s; ctx.lineTo(pen.x,pen.y); ctx.stroke();
+    const a=project(seg[seg.length-2],cx,cy),b=project(seg[seg.length-1],cx,cy),ang=Math.atan2(b.y-a.y,b.x-a.x);
+    ctx.fillStyle=seg[0].site?pal.sheetSite:pal.sheet; ctx.beginPath();
+    ctx.moveTo(b.x+Math.cos(ang)*15,b.y+Math.sin(ang)*15);
+    ctx.lineTo(b.x+Math.cos(ang+2.4)*15,b.y+Math.sin(ang+2.4)*15);
+    ctx.lineTo(b.x+Math.cos(ang-2.4)*15,b.y+Math.sin(ang-2.4)*15); ctx.closePath(); ctx.fill();
+  }
+
+  const PAL_HEALTHY={loop:'#2f7d72',helix:'#3FE0C8',sheet:'#2ea997',sheetSite:'#3FE0C8'};
+  const PAL_MUTANT ={loop:'#8a4433',helix:'#FF6B4A',sheet:'#c85a41',sheetSite:'#FF6B4A'};
+  const PAL_H_GHOST={loop:'rgba(63,224,200,.35)',helix:'rgba(63,224,200,.5)',sheet:'rgba(63,224,200,.4)',sheetSite:'rgba(63,224,200,.5)'};
+  const PAL_M_GHOST={loop:'rgba(255,107,74,.35)',helix:'rgba(255,107,74,.5)',sheet:'rgba(255,107,74,.4)',sheetSite:'rgba(255,107,74,.5)'};
+
+  function enterActII(){
+    state.phase='fold'; state.running=false; clearTimers();
+    el.verdict.classList.remove('show'); el.foldwrap.classList.add('show');
+    runFolds();
+  }
+  // All three canvases share foldClock so they rotate in lockstep.
+  function runFolds(){
+    const cH=document.getElementById('cHealthy'), cM=document.getElementById('cMut'), cO=document.getElementById('cOverlay');
+    if(!cH||!cM||!cO) return;
+    const gH=cH.getContext('2d'), gM=cM.getContext('2d'), gO=cO.getContext('2d');
+    cancelAnimationFrame(foldRAF);
+    (function frame(){
+      const a=foldClock; const cx=cH.width/2, cy=cH.height/2;
+      const ph=backbone(SEG_HEALTHY,a,false), pm=backbone(SEG_MUTANT,a,true);
+      // left: healthy
+      gH.clearRect(0,0,cH.width,cH.height); drawStructure(gH,cx,cy,ph,PAL_HEALTHY);
+      // right: mutant
+      gM.clearRect(0,0,cM.width,cM.height); drawStructure(gM,cx,cy,pm,PAL_MUTANT);
+      // middle: both ghosted + difference flags where the two diverge
+      gO.clearRect(0,0,cO.width,cO.height);
+      drawStructure(gO,cx,cy,ph,PAL_H_GHOST);
+      drawStructure(gO,cx,cy,pm,PAL_M_GHOST);
+      flagDifferences(gO,cx,cy,ph,pm);
+      foldClock+=0.012; foldRAF=requestAnimationFrame(frame);
+    })();
+  }
+  // Compare the two backbones position-by-position; ring the residues that moved most.
+  function flagDifferences(ctx,cx,cy,ph,pm){
+    const n=Math.min(ph.length,pm.length);
+    for(let i=0;i<n;i+=2){
+      const d=Math.hypot(ph[i].x-pm[i].x, ph[i].y-pm[i].y, ph[i].z-pm[i].z);
+      if(d>34){ const q=project(pm[i],cx,cy);
+        ctx.strokeStyle='rgba(255,107,74,.9)'; ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.arc(q.x,q.y,7*q.s,0,Math.PI*2); ctx.stroke(); }
+    }
+  }
+  function setHelperBar(){ document.getElementById('barHelp').textContent=helper?'on':'off'; }
+  function toggleHelper(){ helper=!helper; setHelperBar();
+    if(el.refrow) el.refrow.querySelectorAll('.col.hot').forEach(function(c){c.classList.toggle('helper',helper);});
+    if(el.reads) el.reads.querySelectorAll('.read').forEach(function(r){r.classList.toggle('help',helper);});
+  }
+  function setMode(m){ mode=m;
+    if(m!=='Crowd'&&state&&state.candidateCol!==null){ markCol(state.candidateCol,''); state.candidateCol=null; }
+    if(m==='Vs-machine'&&state.phase==='reads') flash('Vs-machine: catch what you can, then Space lets the pipeline finish.');
+  }
+  function action(){
+    if(state.phase==='scene'){ autoSample(); return; }
+    if(state.phase!=='reads')return;
+    if(mode==='Vs-machine'){
+      const human=state.locked.size;
+      Object.keys(TRUTH).map(Number).forEach(function(i){ if(TRUTH[i].type==='real'){ state.locked.add(i); markCol(i,'locked'); }});
+      el.tally.textContent=state.locked.size;
+      flash('You caught '+human+'/3 \u00B7 pipeline caught 3/3 \u2014 and faster.');
+      setTimeout(callVariant,1400);
+    } else if(state.candidateCol!==null){ commitCol(state.candidateCol); }
+  }
+  function reset(){ if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); mount(stage,mode); }
+  function idle(){
+    if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); state=fresh(); state.phase='fold';
+    stage.innerHTML='<div class="hook">What does a mutation actually <span class="kw">do</span>?</div>'+
+      '<div class="sub">Challenge B \u00B7 idle</div><div class="arena">'+foldHTML()+'</div>';
+    stage.querySelector('#foldwrap').classList.add('show');
+    runFolds();
+  }
+  function unmount(){ if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); }
+  return {id:'B',title:'Read the sewage',mount:mount,setMode:setMode,action:action,reset:reset,idle:idle,unmount:unmount,toggleHelper:toggleHelper};
+})();
+/* ===================== CHALLENGE A: metagenomics ===================== */
+/* Mechanic: taxa are HIDDEN. The player piles fragments that share a pattern.
+   When a pile reaches THRESHOLD same-pattern fragments it dissolves and its taxon
+   is revealed. A taxon's count = number of dissolved piles that resolved to it,
+   i.e. an abundance / biodiversity indicator. */
+var ChallengeA=(function(){
+  // TODO: replace with real reference taxa + real read/pattern data.
+  // `pattern` is what the player visually clusters on; identity is hidden until reveal.
+  var TAXA=[
+    {id:'frog', nm:'Marsh frog',      sci:'Pelophylax',   color:'#5FD37A', glyph:'\uD83D\uDC38'},
+    {id:'reed', nm:'Common reed',     sci:'Phragmites',   color:'#8FBF5F', glyph:'\uD83C\uDF3E'},
+    {id:'daph', nm:'Water flea',      sci:'Daphnia',      color:'#5FB8D3', glyph:'\uD83E\uDD90'},
+    {id:'coli', nm:'Gut bacterium',   sci:'E. coli',      color:'#C9A24B', glyph:'\uD83E\uDDA0'},
+    {id:'cray', nm:'Signal crayfish', sci:'Pacifastacus', color:'#FF6B4A', glyph:'\uD83E\uDD9E', invasive:true}
+  ];
+  // how many same-pattern fragments make a pile "resolve" into a taxon
+  var THRESHOLD=3;
+  // planted abundances: how many resolvable piles exist per taxon (the true counts)
+  var PLAN={frog:2, reed:3, daph:1, coli:2, cray:1};
+  // a distinct visual pattern per taxon (short motif shown on the fragment)
+  var PATTERN={frog:'ACGT', reed:'GGCA', daph:'CGAT', coli:'TTAG', cray:'TACG'};
+
+  var el={}, state, mode, helper=false, timers=[], raf=0;
+
+  function fresh(){ return {phase:'scene', frags:[], resolved:{}, revealed:{},
+                            candidatePile:null, running:false}; }
+  function totalPiles(){ return TAXA.reduce(function(s,t){return s+(PLAN[t.id]||0);},0); }
+  function clearTimers(){ timers.forEach(clearInterval); timers=[]; timers.forEach(clearTimeout); cancelAnimationFrame(raf); }
+  function byId(id){ return TAXA.find(function(t){return t.id===id;}); }
+
+  function mount(root,m){
+    mode=m; state=fresh();
+    root.innerHTML=
+      '<div class="hook">A scoop of pond water \u2014 how many <span class="kw">species</span> are hiding in it?</div>'+
+      '<div class="sub">Challenge A \u00B7 Shotgun metagenomics \u00B7 METAPLANTCODE</div>'+
+      '<div class="arena" id="aArena">'+sceneHTML()+
+        '<div class="aStage" id="aStage">'+
+          '<div class="fragfield" id="fragfield"><div class="lab">DNA fragments \u2014 pile ones that share a pattern</div></div>'+
+          '<div class="orgpanel"><div class="lab">Species identified</div><div class="orgs" id="orgs">'+
+            '<div class="emptyhint" id="emptyhint">No species yet \u2014 cluster matching fragments to reveal them</div>'+
+          '</div></div>'+
+        '</div>'+
+        '<div class="toast" id="aToast"></div>'+
+        '<div class="community" id="community"></div>'+
+      '</div>';
+    el={arena:root.querySelector('#aArena'),scene:root.querySelector('#aScene'),
+        stageEl:root.querySelector('#aStage'),fragfield:root.querySelector('#fragfield'),
+        orgs:root.querySelector('#orgs'),toast:root.querySelector('#aToast'),
+        community:root.querySelector('#community'),emptyhint:root.querySelector('#emptyhint')};
+    wireScene(); setHelperBar();
+  }
+
+  /* ---------- Act 0: sampling scene (scoop -> pond -> sequencer) ---------- */
+  function sceneHTML(){ return ''+
+    '<div id="aScene"><div class="hint" id="aHint">Drag the scoop into the pond, then into the sequencer</div>'+
+      '<div class="node dropzone" id="pond"><svg viewBox="0 0 100 100">'+
+        '<ellipse cx="50" cy="60" rx="42" ry="26" fill="#12303a"/>'+
+        '<ellipse cx="50" cy="56" rx="42" ry="26" fill="#164050" opacity=".7"/>'+
+        '<path d="M20 54 Q30 50 40 54" stroke="#3FE0C8" stroke-width="1.5" fill="none" opacity=".5"/>'+
+        '<path d="M56 62 Q66 58 76 62" stroke="#3FE0C8" stroke-width="1.5" fill="none" opacity=".4"/>'+
+        '<circle cx="38" cy="60" r="2" fill="#5FD37A" opacity=".7"/><circle cx="62" cy="54" r="1.6" fill="#8FBF5F" opacity=".7"/>'+
+        '<path d="M78 40 q4 -10 8 0" stroke="#8FBF5F" stroke-width="2" fill="none"/>'+
+        '</svg><div class="cap">Pond</div></div>'+
+      '<div class="node target" id="scoopNode"><svg id="scoop" viewBox="0 0 100 100">'+
+        '<circle cx="50" cy="44" r="22" fill="none" stroke="#7C93A6" stroke-width="3"/>'+
+        '<path class="water" d="M32 40 Q50 52 68 40 A22 22 0 0 1 32 40 Z" fill="none"/>'+
+        '<rect x="47" y="62" width="6" height="26" rx="3" fill="#7C93A6"/>'+
+        '</svg><div class="cap">Sample scoop</div></div>'+
+      '<div class="node dropzone" id="aSeq"><svg viewBox="0 0 100 100">'+
+        '<rect x="18" y="16" width="64" height="68" rx="4" fill="#33465a"/>'+
+        '<rect x="26" y="24" width="48" height="26" rx="2" fill="#0d1a26"/>'+
+        '<rect x="30" y="30" width="8" height="14" fill="#3FE0C8" opacity=".8"/>'+
+        '<rect x="42" y="34" width="8" height="10" fill="#3FE0C8" opacity=".5"/>'+
+        '<rect x="54" y="28" width="8" height="16" fill="#3FE0C8" opacity=".65"/>'+
+        '<rect x="26" y="56" width="48" height="6" rx="3" fill="#2A3A4A"/>'+
+        '<rect x="26" y="66" width="34" height="6" rx="3" fill="#2A3A4A"/>'+
+        '<circle cx="72" cy="69" r="4" fill="#FF6B4A"/>'+
+        '</svg><div class="cap">Sequencer</div></div></div>'; }
+
+  function wireScene(){
+    var scoop=el.scene.querySelector('#scoop'), pond=el.scene.querySelector('#pond'),
+        seq=el.scene.querySelector('#aSeq'), node=el.scene.querySelector('#scoopNode');
+    var dragging=false, got=false, ox=0, oy=0;
+    function pt(e){ var t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+    function zones(){ return [pond,seq].map(function(z){return {z:z,r:z.getBoundingClientRect()};}); }
+    function over(x,y){ return zones().find(function(o){return x>o.r.left&&x<o.r.right&&y>o.r.top&&y<o.r.bottom;}); }
+    function mv(e){ if(!dragging)return; var p=pt(e);
+      scoop.style.transform='translate('+(p.x-ox)+'px,'+(p.y-oy)+'px)';
+      var hit=over(p.x,p.y); [pond,seq].forEach(function(z){z.classList.remove('armed');});
+      if(hit){ if(hit.z===pond&&!got) pond.classList.add('armed'); if(hit.z===seq&&got) seq.classList.add('armed'); } }
+    function upFn(e){ if(!dragging)return; dragging=false; scoop.classList.remove('dragging'); detach();
+      var p=pt(e), hit=over(p.x,p.y); [pond,seq].forEach(function(z){z.classList.remove('armed');});
+      if(hit&&hit.z===pond&&!got){ got=true; node.classList.add('filled');
+        el.scene.querySelector('.water').style.fill='var(--signal)';
+        el.scene.querySelector('#aHint').textContent='Sample taken \u2014 now drop it into the sequencer';
+      } else if(hit&&hit.z===seq&&got){ startSequencing(); return; }
+      scoop.style.transform=''; }
+    function attach(){ window.addEventListener('mousemove',mv); window.addEventListener('mouseup',upFn);
+      window.addEventListener('touchmove',mv,{passive:false}); window.addEventListener('touchend',upFn); }
+    function detach(){ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',upFn);
+      window.removeEventListener('touchmove',mv); window.removeEventListener('touchend',upFn); }
+    function down(e){ e.preventDefault(); dragging=true; scoop.classList.add('dragging'); var p=pt(e); ox=p.x; oy=p.y; attach(); }
+    scoop.addEventListener('mousedown',down); scoop.addEventListener('touchstart',down,{passive:false});
+    el._sceneCleanup=detach;
+  }
+  function autoSample(){ if(state.phase!=='scene')return; startSequencing(); }
+
+  /* ---------- Act I: pile fragments by shared pattern ---------- */
+  function startSequencing(){
+    state.phase='pile'; state.running=true;
+    el.scene.classList.add('hide'); el.stageEl.classList.add('show');
+    scatterFragments();
+  }
+
+  // Build the fragment population: for each taxon, PLAN[id] piles x THRESHOLD fragments.
+  function scatterFragments(){
+    var field=el.fragfield, W=field.clientWidth, Hh=field.clientHeight, id=0;
+    TAXA.forEach(function(t){
+      var piles=PLAN[t.id]||0;
+      for(var p=0;p<piles;p++){
+        for(var k=0;k<THRESHOLD;k++){
+          state.frags.push({fid:id++, taxon:t.id, pattern:PATTERN[t.id]});
+        }
+      }
+    });
+    // shuffle
+    for(var i=state.frags.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1));
+      var tmp=state.frags[i]; state.frags[i]=state.frags[j]; state.frags[j]=tmp; }
+    state.frags.forEach(function(fr){
+      var f=document.createElement('div'); f.className='frag'; f.dataset.fid=fr.fid; f.dataset.taxon=fr.taxon;
+      // show the PATTERN motif, not the identity
+      f.innerHTML='<span class="motif">'+fr.pattern+'</span>';
+      f.style.left=(14+Math.random()*Math.max(60,W-150))+'px';
+      f.style.top=(46+Math.random()*Math.max(60,Hh-120))+'px';
+      if(helper) tintFrag(f,fr.taxon);
+      wireFrag(f);
+      field.appendChild(f);
+    });
+  }
+  function tintFrag(f,taxon){ var t=byId(taxon); f.style.borderColor=t.color;
+    var mo=f.querySelector('.motif'); if(mo) mo.style.color=t.color; }
+
+  // Dragging a fragment onto another fragment/pile merges them if patterns match.
+  // code-defined pile radius: fragments whose centres fall within this many px
+  // of a seed are considered part of the same spatial cluster.
+  var PILE_RADIUS=70;
+
+  function wireFrag(f){
+    var dragging=false, ox=0, oy=0;
+    function pt(e){ var t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+    function mv(e){ if(!dragging)return; var p=pt(e);
+      f.style.position='fixed'; f.style.left=(p.x-ox)+'px'; f.style.top=(p.y-oy)+'px'; }
+    function upFn(e){ if(!dragging)return; dragging=false; f.classList.remove('dragging'); detach();
+      // drop exactly where released — convert to absolute coords within the field, no snapping
+      var ff=el.fragfield.getBoundingClientRect(), fr=f.getBoundingClientRect();
+      f.style.position='absolute'; f.style.left=(fr.left-ff.left)+'px'; f.style.top=(fr.top-ff.top)+'px';
+      scanPiles();
+    }
+    function attach(){ window.addEventListener('mousemove',mv); window.addEventListener('mouseup',upFn);
+      window.addEventListener('touchmove',mv,{passive:false}); window.addEventListener('touchend',upFn); }
+    function detach(){ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',upFn);
+      window.removeEventListener('touchmove',mv); window.removeEventListener('touchend',upFn); }
+    function down(e){ if(mode!=='Player')return; e.preventDefault(); dragging=true; f.classList.add('dragging');
+      var p=pt(e), r=f.getBoundingClientRect(); ox=p.x-r.left; oy=p.y-r.top; attach(); }
+    f.addEventListener('mousedown',down); f.addEventListener('touchstart',down,{passive:false});
+  }
+
+  // Field coords of a fragment's centre (relative to the field box).
+  function centre(f){ var ff=el.fragfield.getBoundingClientRect(), b=f.getBoundingClientRect();
+    return {x:b.left-ff.left+b.width/2, y:b.top-ff.top+b.height/2, el:f}; }
+
+  // Scan for a spatial cluster around each loose fragment. If any cluster holds
+  // >= THRESHOLD fragments of one pattern, dissolve THAT subset; foreign-pattern
+  // fragments caught in the same radius are left untouched, exactly where they lie.
+  function scanPiles(){
+    var loose=Array.prototype.slice.call(el.fragfield.querySelectorAll('.frag:not(.dissolve)'));
+    var pts=loose.map(centre);
+    for(var i=0;i<pts.length;i++){
+      var near=pts.filter(function(p){ var dx=p.x-pts[i].x, dy=p.y-pts[i].y;
+        return (dx*dx+dy*dy) <= PILE_RADIUS*PILE_RADIUS; });
+      // group the neighbourhood by pattern/taxon
+      var byTax={};
+      near.forEach(function(p){ (byTax[p.el.dataset.taxon]=byTax[p.el.dataset.taxon]||[]).push(p.el); });
+      for(var tx in byTax){
+        if(byTax[tx].length>=THRESHOLD){
+          dissolveSet(byTax[tx].slice(0,THRESHOLD), tx);   // foreign fragments in `near` are NOT included
+          return scanPiles();                              // re-scan in case drops enable more
+        }
+      }
+    }
+  }
+
+  // Dissolve a specific set of same-pattern fragments and reveal/increment the taxon.
+  function dissolveSet(members, taxon){
+    members.forEach(function(m){ m.classList.add('dissolve');
+      timers.push(setTimeout(function(){ if(m.parentNode) m.parentNode.removeChild(m); },420)); });
+    state.resolved[taxon]=(state.resolved[taxon]||0)+1;
+    revealTaxon(taxon, state.resolved[taxon]);
+    state.candidatePile=null;
+    if(mode!=='Player') flagCandidate();
+    var done=TAXA.reduce(function(s,t){return s+(state.resolved[t.id]||0);},0);
+    if(done>=totalPiles()) timers.push(setTimeout(reveal,600));
+  }
+
+  // Add taxon row on first resolve; bump its count on subsequent resolves.
+  function revealTaxon(taxon, count){
+    if(el.emptyhint){ el.emptyhint.style.display='none'; }
+    var t=byId(taxon);
+    var row=el.orgs.querySelector('.org[data-id="'+taxon+'"]');
+    if(!row){
+      row=document.createElement('div'); row.className='org appear'+(t.invasive?' invasive found':''); row.dataset.id=taxon;
+      row.innerHTML='<span class="dot" style="background:'+t.color+'"></span>'+
+        '<span><div class="nm">'+t.nm+'</div><div class="sci">'+t.sci+'</div></span>'+
+        '<span class="cnt" id="acnt-'+taxon+'">'+count+'</span>';
+      row.addEventListener('click',function(){ if(mode!=='Player') commitCandidate(); });
+      el.orgs.appendChild(row);
+    } else {
+      var c=document.getElementById('acnt-'+taxon); if(c){ c.textContent=count; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
+    }
+  }
+
+  /* ---------- Crowd / Vs-machine input paths ---------- */
+  // Crowd: the app highlights a set of matching fragments (a "candidate cluster");
+  // the attendant confirms (Space / click) and they pile+resolve together.
+  function flagCandidate(){
+    if(mode==='Player')return;
+    if(state.candidatePile && state.candidatePile.every(function(f){return document.body.contains(f);})) return;
+    // find THRESHOLD loose fragments of the same taxon
+    var loose={};
+    el.fragfield.querySelectorAll('.frag:not(.piled):not(.dissolve)').forEach(function(f){
+      (loose[f.dataset.taxon]=loose[f.dataset.taxon]||[]).push(f); });
+    var pick=null;
+    Object.keys(loose).forEach(function(tx){ if(!pick && loose[tx].length>=THRESHOLD) pick=loose[tx].slice(0,THRESHOLD); });
+    state.candidatePile=pick;
+    if(pick) pick.forEach(function(f){ f.classList.add('candidate'); });
+  }
+  function commitCandidate(){
+    if(!state.candidatePile || !state.candidatePile.length){ flagCandidate(); }
+    if(!state.candidatePile) return;
+    var set=state.candidatePile, taxon=set[0].dataset.taxon;
+    set.forEach(function(f){ f.classList.remove('candidate'); });
+    dissolveSet(set.slice(), taxon);
+  }
+
+  function flash(m){ el.toast.textContent=m; el.toast.classList.add('show');
+    timers.push(setTimeout(function(){el.toast.classList.remove('show');},1700)); }
+
+  /* ---------- Reveal: populated community with abundances ---------- */
+  function reveal(){
+    state.phase='reveal'; state.running=false;
+    var found=TAXA.filter(function(t){ return state.resolved[t.id]; });
+    var richness=found.length;
+    var html='<div class="big">This pond holds <span class="kw">'+richness+' species</span> \u2014 mapped from DNA alone</div>'+
+      '<div class="commgrid">';
+    found.forEach(function(t){ var ab=state.resolved[t.id];
+      html+='<div class="commorg'+(t.invasive?' invasive':'')+'">'+
+        '<div class="glyph">'+t.glyph+'</div><div class="clab">'+t.nm+'</div>'+
+        '<div class="cabund">\u00D7'+ab+'</div></div>'; });
+    html+='</div>';
+    if(found.some(function(t){return t.invasive;}))
+      html+='<div class="flag">\u26A0 Invasive species detected: Signal crayfish</div>';
+    el.community.innerHTML=html; el.community.classList.add('show');
+  }
+
+  /* ---------- contract ---------- */
+  function setHelperBar(){ document.getElementById('barHelp').textContent=helper?'on':'off'; }
+  function toggleHelper(){ helper=!helper; setHelperBar();
+    if(el.fragfield) el.fragfield.querySelectorAll('.frag:not(.dissolve)').forEach(function(f){
+      if(helper) tintFrag(f,f.dataset.taxon);
+      else { f.style.borderColor=''; var mo=f.querySelector('.motif'); if(mo) mo.style.color=''; } });
+  }
+  function setMode(m){ mode=m;
+    if(el.fragfield){ el.fragfield.querySelectorAll('.frag.candidate').forEach(function(f){ if(m==='Player') f.classList.remove('candidate'); }); }
+    if(m!=='Player'&&state.phase==='pile'){ state.candidatePile=null; flagCandidate(); }
+    if(m==='Vs-machine'&&state.phase==='pile') flash('Vs-machine: cluster a few, then Space lets the pipeline finish.');
+  }
+  function action(){
+    if(state.phase==='scene'){ autoSample(); return; }
+    if(state.phase!=='pile')return;
+    if(mode==='Vs-machine'){
+      // pipeline clusters every remaining read by pattern, instantly
+      var groups={};
+      el.fragfield.querySelectorAll('.frag:not(.dissolve)').forEach(function(f){
+        (groups[f.dataset.taxon]=groups[f.dataset.taxon]||[]).push(f); });
+      Object.keys(groups).forEach(function(tx){
+        var arr=groups[tx];
+        for(var i=0;i+THRESHOLD<=arr.length;i+=THRESHOLD){
+          dissolveSet(arr.slice(i,i+THRESHOLD), tx);
+        }
+      });
+      flash('The pipeline clustered every read \u2014 in an instant.');
+    } else if(mode==='Crowd'){
+      commitCandidate();
+    }
+  }
+  function reset(){ if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); mount(stage,mode); }
+  function idle(){
+    if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); state=fresh();
+    stage.innerHTML='<div class="hook">DNA from a scoop of water reveals a whole <span class="kw">ecosystem</span>.</div>'+
+      '<div class="sub">Challenge A \u00B7 idle</div>'+
+      '<div class="arena"><div class="community show" id="idleComm"></div></div>';
+    var comm=stage.querySelector('#idleComm');
+    function loop(){ var html='<div class="commgrid">';
+      TAXA.forEach(function(t){ html+='<div class="commorg'+(t.invasive?' invasive':'')+'">'+
+        '<div class="glyph">'+t.glyph+'</div><div class="clab">'+t.nm+'</div>'+
+        '<div class="cabund">\u00D7'+(PLAN[t.id]||0)+'</div></div>'; });
+      html+='</div>'; comm.innerHTML=html;
+      timers.push(setTimeout(function(){ comm.innerHTML=''; timers.push(setTimeout(loop,700)); },3200));
+    }
+    loop();
+  }
+  function unmount(){ if(el._sceneCleanup)el._sceneCleanup(); clearTimers(); }
+
+  function onResize(){
+    if(!el.fragfield || state.phase!=='pile') return;
+    var W=el.fragfield.clientWidth, Hh=el.fragfield.clientHeight;
+    el.fragfield.querySelectorAll('.frag').forEach(function(f){
+      var l=parseFloat(f.style.left)||0, t=parseFloat(f.style.top)||0;
+      f.style.left=Math.max(6,Math.min(l,W-70))+'px';
+      f.style.top=Math.max(40,Math.min(t,Hh-30))+'px';
+    });
+  }
+
+  return {id:'A',title:'What lives here?',mount:mount,setMode:setMode,action:action,
+    reset:reset,idle:idle,unmount:unmount,toggleHelper:toggleHelper,onResize:onResize};
+})();
+
+/* ===================== CHALLENGE C: ML cell typing ===================== */
+/* Mechanic: an almost-homogeneous mass of cells with overlapping hidden clusters,
+   plus one small rare "disease" population with a unique dot shape. The player
+   draws MULTIPLE lasso groups (add / remove), each recoloured with live stats
+   scored against the true clusters. Then the ML runs and separates everything -
+   including the rare population - the "you are the computer, but faster" beat. */
+var ChallengeC=(function(){
+  // TODO: replace synthetic cells with real scRNA-seq embedding coordinates (UMAP)
+  // and a real clustering call. Shapes/colours here are illustrative only.
+  // Centres are deliberately close + spreads wide so clusters OVERLAP into one mass.
+  var CLUSTERS=[
+    {id:'t',   nm:'T cells',        color:'#5FB8D3', shape:'circle',   cx:0.44, cy:0.46, r:0.17, n:90},
+    {id:'b',   nm:'B cells',        color:'#8FBF5F', shape:'square',   cx:0.56, cy:0.44, r:0.16, n:78},
+    {id:'mono',nm:'Monocytes',      color:'#C9A24B', shape:'triangle', cx:0.52, cy:0.58, r:0.16, n:72},
+    {id:'nk',  nm:'NK cells',       color:'#B58FD3', shape:'diamond',  cx:0.46, cy:0.56, r:0.14, n:54},
+    // disease population sits WITHIN the mass, widely spread - only its shape gives it away
+    {id:'ca',  nm:'Abnormal blasts',color:'#FF6B4A', shape:'star',     cx:0.51, cy:0.52, r:0.11, n:26, disease:true}
+  ];
+  var GROUP_COLORS=['#3FE0C8','#FFD166','#EF476F','#A0E7A0','#8AB4FF','#F58A4B'];
+
+  var el={}, state, mode, helper=false, timers=[], raf=0, cv, ctx, DPR=1;
+
+  function fresh(){ return {phase:'scene', cells:[], groups:[], lasso:[], lassoing:false,
+    threshold:0.5, mlDone:false, running:false, nextColor:0}; }
+  function clearTimers(){ timers.forEach(clearTimeout); timers.forEach(clearInterval); timers=[]; cancelAnimationFrame(raf); }
+  function byId(id){ return CLUSTERS.find(function(c){return c.id===id;}); }
+
+  function mount(root,m){
+    mode=m; state=fresh();
+    root.innerHTML=
+      '<div class="hook">Thousands of cells from a patient. Some are <span class="kw">abnormal</span>. Could you find them by eye?</div>'+
+      '<div class="sub">Challenge C \u00B7 Machine learning \u00B7 single-cell RNA-seq</div>'+
+      '<div class="arena" id="cArena">'+sceneHTML()+
+        '<div class="cStage" id="cStage">'+
+          '<div class="cTop"><div class="lab" id="cLab">Draw loops around groups of cells that look alike \u2014 make as many as you like</div></div>'+
+          '<div class="cBody">'+
+            '<div class="ccanvas-wrap"><canvas id="cCanvas"></canvas>'+
+              '<div class="cReveal" id="cReveal"></div></div>'+
+            '<div class="cGroups" id="cGroups"><div class="glab">Your groups</div>'+
+              '<div class="glist" id="cGlist"><div class="gempty" id="cGempty">No groups yet</div></div></div>'+
+          '</div>'+
+          '<div class="cTools" id="cTools">'+
+            '<div class="cSlider" id="cSliderWrap" style="display:none">threshold '+
+              '<input type="range" id="cSlider" min="0" max="1" step="0.01" value="0.5"></div>'+
+            '<button class="cBtn ml" id="cRun">Let the computer sort \u2192</button>'+
+            '<div class="cScore" id="cScore"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="toast" id="cToast"></div>'+
+      '</div>';
+    el={arena:root.querySelector('#cArena'),scene:root.querySelector('#cScene'),
+        stageEl:root.querySelector('#cStage'),lab:root.querySelector('#cLab'),
+        canvas:root.querySelector('#cCanvas'),reveal:root.querySelector('#cReveal'),
+        tools:root.querySelector('#cTools'),runBtn:root.querySelector('#cRun'),
+        score:root.querySelector('#cScore'),glist:root.querySelector('#cGlist'),
+        gempty:root.querySelector('#cGempty'),
+        sliderWrap:root.querySelector('#cSliderWrap'),slider:root.querySelector('#cSlider'),
+        toast:root.querySelector('#cToast')};
+    el.runBtn.onclick=function(){ runML(); };
+    el.slider.oninput=function(){ state.threshold=parseFloat(el.slider.value); draw(); };
+    wireScene(); setHelperBar(); applyModeUI();
+  }
+
+  /* ---------- Act 0: sampling scene ---------- */
+  function sceneHTML(){ return ''+
+    '<div id="cScene"><div class="hint" id="cHint">Drag the blood sample into the analyzer</div>'+
+      '<div class="node target" id="cSample"><svg id="vial" viewBox="0 0 100 100">'+
+        '<rect x="38" y="14" width="24" height="12" rx="2" fill="#7C93A6"/>'+
+        '<path d="M40 26 L40 78 Q40 86 50 86 Q60 86 60 78 L60 26 Z" fill="#16283a" stroke="#7C93A6" stroke-width="3"/>'+
+        '<path class="water" d="M41 50 L41 78 Q41 85 50 85 Q59 85 59 78 L59 50 Z" fill="none"/>'+
+        '</svg><div class="cap">Blood sample</div></div>'+
+      '<div class="node dropzone" id="cyto"><svg viewBox="0 0 100 100">'+
+        '<rect x="16" y="18" width="68" height="64" rx="5" fill="#33465a"/>'+
+        '<circle cx="50" cy="46" r="18" fill="#0d1a26"/>'+
+        '<circle cx="44" cy="42" r="2.5" fill="#5FB8D3"/><circle cx="54" cy="40" r="2" fill="#8FBF5F"/>'+
+        '<circle cx="52" cy="52" r="2.5" fill="#C9A24B"/><circle cx="46" cy="50" r="2" fill="#FF6B4A"/>'+
+        '<rect x="26" y="70" width="48" height="5" rx="2" fill="#2A3A4A"/>'+
+        '</svg><div class="cap">Cell analyzer</div></div></div>'; }
+
+  function wireScene(){
+    var vial=el.scene.querySelector('#vial'), cyto=el.scene.querySelector('#cyto');
+    var dragging=false, ox=0, oy=0;
+    function pt(e){ var t=e.touches?e.touches[0]:e; return {x:t.clientX,y:t.clientY}; }
+    function over(x,y){ var r=cyto.getBoundingClientRect(); return x>r.left&&x<r.right&&y>r.top&&y<r.bottom; }
+    function mv(e){ if(!dragging)return; var p=pt(e);
+      vial.style.transform='translate('+(p.x-ox)+'px,'+(p.y-oy)+'px)';
+      cyto.classList.toggle('armed',over(p.x,p.y)); }
+    function upFn(e){ if(!dragging)return; dragging=false; vial.classList.remove('dragging'); detach();
+      var p=pt(e); cyto.classList.remove('armed');
+      if(over(p.x,p.y)){ startAnalysis(); return; } vial.style.transform=''; }
+    function attach(){ window.addEventListener('mousemove',mv); window.addEventListener('mouseup',upFn);
+      window.addEventListener('touchmove',mv,{passive:false}); window.addEventListener('touchend',upFn); }
+    function detach(){ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',upFn);
+      window.removeEventListener('touchmove',mv); window.removeEventListener('touchend',upFn); }
+    function down(e){ e.preventDefault(); dragging=true; vial.classList.add('dragging'); var p=pt(e); ox=p.x; oy=p.y; attach(); }
+    vial.addEventListener('mousedown',down); vial.addEventListener('touchstart',down,{passive:false});
+    el._sceneCleanup=detach;
+  }
+  function autoSample(){ if(state.phase!=='scene')return; startAnalysis(); }
+
+  /* ---------- Act I: overlapping cloud + multi-lasso ---------- */
+  function startAnalysis(){
+    state.phase='sort'; state.running=true;
+    el.scene.classList.add('hide'); el.stageEl.classList.add('show');
+    buildCells(); initCanvas(); wireLasso(); draw();
+  }
+  function buildCells(){
+    state.cells=[];
+    CLUSTERS.forEach(function(c){
+      for(var i=0;i<c.n;i++){
+        // wide gaussian-ish scatter so neighbouring clusters bleed together
+        var a=Math.random()*Math.PI*2;
+        var rr=Math.abs(gauss())*c.r;                    // heavy tails -> overlap
+        state.cells.push({x:c.cx+Math.cos(a)*rr, y:c.cy+Math.sin(a)*rr,
+          cid:c.id, shape:c.shape, disease:!!c.disease, group:-1,
+          rot:Math.random()*Math.PI, sz:0.85+Math.random()*0.4});
+      }
+    });
+  }
+  function gauss(){ return (Math.random()+Math.random()+Math.random()-1.5)/1.5; } // ~N(0,1)-ish
+
+  function initCanvas(){
+    cv=el.canvas; ctx=cv.getContext('2d'); DPR=window.devicePixelRatio||1;
+    fitCanvas();
+  }
+  function fitCanvas(){
+    if(!cv)return;
+    var b=cv.getBoundingClientRect(), w=b.width, h=b.height;
+    if(!w||!h){ var pb=cv.parentNode.getBoundingClientRect(); w=w||pb.width||800; h=h||pb.height||500; }
+    cv.width=w*DPR; cv.height=h*DPR;
+  }
+  function toPx(p){ return {x:p.x*cv.width, y:p.y*cv.height}; }
+
+  // draw one cell as its shape
+  function drawCell(p,r,shape,rot){
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(rot);
+    ctx.beginPath();
+    if(shape==='circle'){ ctx.arc(0,0,r,0,Math.PI*2); }
+    else if(shape==='square'){ ctx.rect(-r,-r,r*2,r*2); }
+    else if(shape==='diamond'){ ctx.moveTo(0,-r*1.3);ctx.lineTo(r,0);ctx.lineTo(0,r*1.3);ctx.lineTo(-r,0);ctx.closePath(); }
+    else if(shape==='triangle'){ ctx.moveTo(0,-r*1.3);ctx.lineTo(r*1.15,r);ctx.lineTo(-r*1.15,r);ctx.closePath(); }
+    else if(shape==='star'){ for(var k=0;k<10;k++){ var ang=Math.PI*k/5, rad=k%2?r*0.5:r*1.5;
+        ctx[k?'lineTo':'moveTo'](Math.cos(ang)*rad,Math.sin(ang)*rad);} ctx.closePath(); }
+    ctx.fill(); ctx.restore();
+  }
+
+  function draw(){
+    if(!ctx)return;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    // faint histopathology-slide wash
+    ctx.fillStyle='rgba(120,70,120,0.05)'; ctx.fillRect(0,0,cv.width,cv.height);
+    var base=3.4*DPR;
+    state.cells.forEach(function(cell){
+      var p=toPx(cell); var col;
+      if(state.mlDone){ col=clusterColor(cell.cid); }
+      else if(cell.group>=0){ col=state.groups[cell.group].color; }
+      else if(helper){ col=hexA(clusterColor(cell.cid),0.5); }
+      else col='rgba(150,120,150,0.85)';                     // eosin/haematoxylin-ish grey-mauve mass
+      ctx.fillStyle=col; drawCell(p, base*cell.sz, cell.shape, cell.rot);
+    });
+    // in-progress lasso
+    if(state.lasso.length>1){
+      ctx.beginPath();
+      state.lasso.forEach(function(pt,i){ var q=toPx(pt); i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y); });
+      ctx.closePath(); ctx.strokeStyle='#E8EEF2'; ctx.lineWidth=2*DPR; ctx.stroke();
+      ctx.fillStyle='rgba(232,238,242,.06)'; ctx.fill();
+    }
+    // committed group outlines
+    state.groups.forEach(function(g){
+      if(g.poly.length<2)return;
+      ctx.beginPath(); g.poly.forEach(function(pt,i){ var q=toPx(pt); i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y); });
+      ctx.closePath(); ctx.strokeStyle=g.color; ctx.lineWidth=2*DPR; ctx.stroke();
+    });
+    if(state.mlDone) drawMLOverlay();
+  }
+  function clusterColor(cid){ var c=byId(cid); return c?c.color:'#7C93A6'; }
+  function hexA(hex,a){ var n=parseInt(hex.slice(1),16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+  function inThreshold(cell){ return cell.x<=state.threshold && cell.x>state.threshold-0.12; }
+
+  // After ML: faint hulls for the healthy cell types, but the disease population is
+  // ringed cell-by-cell - because it's scattered WITHIN the mass, not spatially apart.
+  function drawMLOverlay(){
+    CLUSTERS.forEach(function(c){
+      if(c.disease) return;
+      var ctr=toPx({x:c.cx,y:c.cy}); var rad=c.r*Math.max(cv.width,cv.height)*0.85;
+      ctx.beginPath(); ctx.arc(ctr.x,ctr.y,rad,0,Math.PI*2);
+      ctx.strokeStyle=hexA(c.color,0.4); ctx.lineWidth=1.5*DPR; ctx.stroke();
+    });
+    // ring each abnormal cell
+    ctx.strokeStyle='#FF6B4A'; ctx.lineWidth=2*DPR;
+    state.cells.forEach(function(cell){ if(!cell.disease)return;
+      var p=toPx(cell); ctx.beginPath(); ctx.arc(p.x,p.y,7*DPR,0,Math.PI*2); ctx.stroke(); });
+  }
+
+  /* ---------- multi-lasso: add & remove groups ---------- */
+  function wireLasso(){
+    function pt(e){ var t=e.touches?e.touches[0]:e; var b=cv.getBoundingClientRect();
+      return {x:(t.clientX-b.left)/b.width, y:(t.clientY-b.top)/b.height}; }
+    function down(e){ if(mode!=='Player'||state.mlDone)return; e.preventDefault();
+      state.lassoing=true; state.lasso=[pt(e)]; }
+    function move(e){ if(!state.lassoing)return; e.preventDefault(); state.lasso.push(pt(e)); draw(); }
+    function up(){ if(!state.lassoing)return; state.lassoing=false; commitGroup(); state.lasso=[]; draw(); }
+    cv.addEventListener('mousedown',down); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+    cv.addEventListener('touchstart',down,{passive:false}); cv.addEventListener('touchmove',move,{passive:false});
+    window.addEventListener('touchend',up);
+    el._lassoCleanup=function(){ window.removeEventListener('mouseup',up); window.removeEventListener('touchend',up); };
+  }
+
+  function commitGroup(){
+    if(state.lasso.length<3) return;
+    var poly=state.lasso.slice();
+    var members=[];
+    state.cells.forEach(function(cell){ if(cell.group===-1 && pointInPoly(cell,poly)) members.push(cell); });
+    if(!members.length){ flash('No cells caught \u2014 try looping a denser area.'); return; }
+    var gi=state.groups.length;
+    var color=GROUP_COLORS[state.nextColor++ % GROUP_COLORS.length];
+    members.forEach(function(c){ c.group=gi; });
+    state.groups.push({color:color, poly:poly, members:members});
+    renderGroups();
+    el.lab.textContent='Group added. Keep going, or let the computer sort.';
+  }
+
+  function removeGroup(gi){
+    var g=state.groups[gi]; if(!g)return;
+    g.members.forEach(function(c){ c.group=-1; });
+    state.groups.splice(gi,1);
+    // reindex remaining groups
+    state.groups.forEach(function(gg,idx){ gg.members.forEach(function(c){ c.group=idx; }); });
+    renderGroups(); draw();
+  }
+
+  // stats per group: composition against the TRUE clusters + purity
+  function renderGroups(){
+    if(el.gempty) el.gempty.style.display=state.groups.length?'none':'';
+    var html='';
+    state.groups.forEach(function(g,gi){
+      var counts={}; g.members.forEach(function(c){ counts[c.cid]=(counts[c.cid]||0)+1; });
+      var ids=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a];});
+      var top=ids[0], purity=Math.round(counts[top]/g.members.length*100);
+      var comp=ids.slice(0,3).map(function(id){ return '<span style="color:'+byId(id).color+'">'+
+        byId(id).nm+' '+Math.round(counts[id]/g.members.length*100)+'%</span>'; }).join(' \u00B7 ');
+      var hasDisease=counts['ca']?' <span class="gdis">\u26A0 rare cells</span>':'';
+      html+='<div class="grow"><div class="gdot" style="background:'+g.color+'"></div>'+
+        '<div class="ginfo"><div class="gtitle">Group '+(gi+1)+' \u2014 '+g.members.length+' cells \u00B7 '+purity+'% '+byId(top).nm+hasDisease+'</div>'+
+        '<div class="gcomp">'+comp+'</div></div>'+
+        '<button class="grm" data-gi="'+gi+'">\u2715</button></div>';
+    });
+    el.glist.innerHTML=(state.groups.length?'':'<div class="gempty" id="cGempty">No groups yet</div>')+html;
+    el.gempty=el.glist.querySelector('#cGempty');
+    el.glist.querySelectorAll('.grm').forEach(function(b){
+      b.onclick=function(){ removeGroup(parseInt(b.dataset.gi,10)); }; });
+  }
+
+  function pointInPoly(p,poly){
+    var inside=false;
+    for(var i=0,j=poly.length-1;i<poly.length;j=i++){
+      var xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+      var hit=((yi>p.y)!==(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi);
+      if(hit) inside=!inside;
+    }
+    return inside;
+  }
+  function flash(m){ el.toast.textContent=m; el.toast.classList.add('show');
+    timers.push(setTimeout(function(){el.toast.classList.remove('show');},1700)); }
+
+  /* ---------- the "machine does it better" flip ---------- */
+  function runML(){
+    if(state.mlDone)return;
+    state.mlDone=true; state.phase='reveal-anim';
+    el.lab.textContent='Machine learning clustered every cell by its expression profile.';
+    var t0=performance.now();
+    (function settle(now){
+      var k=Math.min(1,(now-t0)/750);
+      state.cells.forEach(function(cell){
+        if(cell._sx===undefined){ cell._sx=cell.x; cell._sy=cell.y;
+          var c=byId(cell.cid);
+          // healthy clusters tighten; disease cells stay dispersed within the mass
+          var spread=cell.disease?c.r*0.95:c.r*0.55;
+          var a=Math.random()*Math.PI*2, rr=Math.abs(gauss())*spread;
+          cell._tx=c.cx+Math.cos(a)*rr; cell._ty=c.cy+Math.sin(a)*rr; }
+        cell.x=cell._sx+(cell._tx-cell._sx)*ease(k); cell.y=cell._sy+(cell._ty-cell._sy)*ease(k);
+      });
+      draw();
+      if(k<1) raf=requestAnimationFrame(settle); else finishML();
+    })(t0);
+  }
+  function ease(t){ return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2; }
+
+  function finishML(){
+    var mlAcc=98;
+    // best human purity across groups, if any
+    var human=null;
+    state.groups.forEach(function(g){ var counts={}; g.members.forEach(function(c){counts[c.cid]=(counts[c.cid]||0)+1;});
+      var top=Object.keys(counts).reduce(function(a,b){return counts[b]>(counts[a]||0)?b:a;},Object.keys(counts)[0]);
+      var pur=Math.round(counts[top]/g.members.length*100); if(human===null||pur>human) human=pur; });
+    if(mode==='Vs-machine'){
+      el.score.innerHTML='best group <b>'+(human!=null?human+'%':'\u2014')+'</b> \u00B7 computer <span class="m">'+mlAcc+'%</span>';
+    }
+    reveal(human);
+  }
+
+  function reveal(human){
+    state.phase='reveal';
+    var disease=byId('ca');
+    var richness=CLUSTERS.length;
+    var caughtDisease=state.groups.some(function(g){ return g.members.some(function(c){return c.disease;}); });
+    // always-visible human vs computer comparison
+    var cmp='<div class="cmp">'+
+      '<span class="you">your best group <b>'+(human!=null?human+'%':'\u2014')+'</b> pure</span>'+
+      '<span class="comp">the model <b>~98%</b> \u00B7 '+richness+' types resolved</span></div>';
+    var caught = caughtDisease
+      ? '<div class="flag" style="color:var(--signal)">you caught some abnormal cells by eye \u2014 nice spotting</div>'
+      : '<div class="flag" style="color:var(--dim)">the abnormal cells were mixed into the mass \u2014 hard to catch by eye</div>';
+    el.reveal.innerHTML=
+      '<div class="big">The model sorted the cells into <span class="kw">'+richness+' types</span> and ringed a hidden <span class="alert">abnormal population</span> \u2014 \u26A0 '+disease.n+' blast cells, a possible leukemia signature</div>'+
+      cmp + caught;
+    el.reveal.classList.add('show');
+  }
+
+  /* ---------- contract ---------- */
+  function setHelperBar(){ document.getElementById('barHelp').textContent=helper?'on':'off'; }
+  function toggleHelper(){ helper=!helper; setHelperBar(); if(ctx) draw(); }
+  function applyModeUI(){
+    if(!el.sliderWrap)return;
+    var crowd=(mode==='Crowd');
+    el.sliderWrap.style.display=crowd?'flex':'none';
+    if(el.lab && state.phase==='sort'){
+      el.lab.textContent = crowd
+        ? 'Attendant: slide the gate to where the crowd sees a group separate, then run.'
+        : (mode==='Vs-machine'
+          ? 'Draw loops around groups you think are one cell type \u2014 your best is scored vs the model.'
+          : 'Draw loops around groups of cells that look alike \u2014 make as many as you like');
+    }
+  }
+  function setMode(m){ mode=m; applyModeUI(); if(ctx) draw(); }
+  function action(){
+    if(state.phase==='scene'){ autoSample(); return; }
+    if(state.phase==='sort'){ runML(); }
+  }
+  function onResize(){ if(state && (state.phase==='sort'||state.phase==='reveal'||state.phase==='reveal-anim') && cv){ fitCanvas(); draw(); } }
+  function reset(){ if(el._sceneCleanup)el._sceneCleanup(); if(el._lassoCleanup)el._lassoCleanup(); clearTimers(); mount(stage,mode); }
+  function idle(){
+    if(el._sceneCleanup)el._sceneCleanup(); if(el._lassoCleanup)el._lassoCleanup(); clearTimers(); state=fresh();
+    stage.innerHTML='<div class="hook">Machine learning finds the cell types no human could label by hand.</div>'+
+      '<div class="sub">Challenge C \u00B7 idle</div>'+
+      '<div class="arena"><div class="ccanvas-wrap" style="position:absolute;inset:2vh 2vw"><canvas id="cIdle"></canvas></div></div>';
+    var ic=stage.querySelector('#cIdle'), ictx=ic.getContext('2d');
+    function fit(){ var b=ic.getBoundingClientRect(); ic.width=b.width||800; ic.height=b.height||500; }
+    fit();
+    var cells=[]; CLUSTERS.forEach(function(c){ for(var i=0;i<c.n;i++){
+      var a=Math.random()*Math.PI*2, rr=Math.abs(gauss())*c.r;
+      cells.push({tx:c.cx+Math.cos(a)*rr, ty:c.cy+Math.sin(a)*rr,
+        sx:Math.random(), sy:Math.random(), col:c.color, shape:c.shape, disease:!!c.disease}); } });
+    el._idleFit=fit;
+    var t0=performance.now();
+    (function loop(now){
+      var ph=(Math.sin((now-t0)/1600)+1)/2;
+      ictx.clearRect(0,0,ic.width,ic.height);
+      cells.forEach(function(cell){
+        var x=(cell.sx+(cell.tx-cell.sx)*ph)*ic.width, y=(cell.sy+(cell.ty-cell.sy)*ph)*ic.height;
+        ictx.beginPath(); ictx.arc(x,y,cell.disease?3.2:2.6,0,Math.PI*2);
+        ictx.fillStyle = ph>0.6 ? (cell.disease?'#FF6B4A':cell.col) : 'rgba(124,147,166,.7)'; ictx.fill();
+      });
+      raf=requestAnimationFrame(loop);
+    })(t0);
+  }
+  function unmount(){ if(el._sceneCleanup)el._sceneCleanup(); if(el._lassoCleanup)el._lassoCleanup(); el._idleFit=null; clearTimers(); }
+
+  return {id:'C',title:'Sort the cells',mount:mount,setMode:setMode,action:action,
+    reset:reset,idle:idle,unmount:unmount,toggleHelper:toggleHelper,onResize:onResize,_idleResize:function(){ if(el._idleFit)el._idleFit(); }};
+})();
+Shell.register(ChallengeA);
+Shell.register(ChallengeB);
+Shell.register(ChallengeC);
+Shell.go('B');
+</script>
+</body>
+</html>
